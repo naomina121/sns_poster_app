@@ -31,7 +31,7 @@ SNS Poster Appは、複数のSNSアカウント（Bluesky、X/Twitter、Threads�
 ### 1. リポジトリのクローン
 
 ```bash
-git clone https://github.com/yourusername/sns_poster_app.git
+git clone https://github.com/naomina121/sns_poster_app.git
 cd sns_poster_app
 ```
 
