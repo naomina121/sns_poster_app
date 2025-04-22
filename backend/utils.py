@@ -427,7 +427,7 @@ class SnsClient:
                         media_ids.append(media_result["media_id"])
 
                 if not media_ids:
-                    return {"success": False, "error": "現在のThreadsではメディア投稿に対応されてないようです。"}
+                    return {"success": False, "error": "メディアのアップロードに失敗しました"}
 
                 # メディア付き投稿
                 response = self.clients["x"]["client"].create_tweet(

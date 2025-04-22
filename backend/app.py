@@ -10,6 +10,8 @@ from utils import sns_client, get_character_limits
 from models import ScheduledPostDB, create_tables
 from scheduler import PostScheduler
 from dotenv import load_dotenv
+from sqlalchemy import update
+from models import ScheduledPost, engine
 
 # ロガーの設定
 logging.basicConfig(
@@ -74,15 +76,32 @@ def post_to_sns():
         return jsonify({"success": False, "error": "データが送信されていません"}), 400
 
     posts = {}
-    for platform in ["bluesky", "x", "threads", "misskey", "mastodon"]:
-        if platform in data and data[platform]["selected"]:
-            posts[platform] = data[platform]["content"]
+    post_mode = data.get('post_mode', 'unified')
+
+    if post_mode == 'unified':
+        # 一括モードの場合
+        content = data.get('content', '')
+        if not content:
+            return jsonify({"success": False, "error": "投稿内容が空です"}), 400
+
+        for platform in ["bluesky", "x", "threads", "misskey", "mastodon"]:
+            if platform in data and data[platform]["selected"]:
+                posts[platform] = content
+    else:
+        # 個別モードの場合
+        for platform in ["bluesky", "x", "threads", "misskey", "mastodon"]:
+            if platform in data and data[platform]["selected"]:
+                posts[platform] = data[platform]["content"]
 
     if not posts:
         return jsonify({"success": False, "error": "投稿先のSNSが選択されていません"}), 400
 
     # 各プラットフォームに投稿
-    results = sns_client.post_to_platforms(posts)
+    try:
+        results = sns_client.post_to_platforms(posts)
+    except Exception as e:
+        logger.error(f"投稿処理中に予期せぬエラーが発生しました: {e}")
+        return jsonify({"success": False, "error": f"投稿処理中にエラーが発生しました: {str(e)}"}), 500
 
     # 全体の成功・失敗を判定
     all_success = all(result.get("success", False) for result in results.values())
@@ -105,25 +124,35 @@ def upload_media():
     uploaded_file_paths = []
     media_infos = []
 
-    for file in uploaded_files:
-        if file and allowed_file(file.filename):
-            # 安全なファイル名を生成
-            filename = secure_filename(file.filename)
-            # ユニークなファイル名を作成
-            unique_filename = f"{str(uuid.uuid4())}_{filename}"
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+    try:
+        for file in uploaded_files:
+            if file and allowed_file(file.filename):
+                # 安全なファイル名を生成
+                filename = secure_filename(file.filename)
+                # ユニークなファイル名を作成
+                unique_filename = f"{str(uuid.uuid4())}_{filename}"
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
 
-            # ファイルを保存
-            file.save(file_path)
-            uploaded_file_paths.append(file_path)
+                try:
+                    # ファイルを保存
+                    file.save(file_path)
+                    uploaded_file_paths.append(file_path)
 
-            # メディア情報を作成
-            media_infos.append({
-                "name": filename,
-                "path": file_path,
-                "size": os.path.getsize(file_path),
-                "type": file.content_type
-            })
+                    # メディア情報を作成
+                    media_infos.append({
+                        "name": filename,
+                        "path": file_path,
+                        "size": os.path.getsize(file_path),
+                        "type": file.content_type
+                    })
+                except Exception as e:
+                    logger.error(f"ファイルの保存中にエラーが発生しました: {e}")
+                    return jsonify({"success": False, "error": f"ファイル {filename} の保存中にエラーが発生しました"}), 500
+            else:
+                logger.warning(f"許可されていないファイル形式: {file.filename if file else 'None'}")
+    except Exception as e:
+        logger.error(f"ファイルアップロード処理中にエラーが発生しました: {e}")
+        return jsonify({"success": False, "error": f"ファイルのアップロード中にエラーが発生しました: {str(e)}"}), 500
 
     if not uploaded_file_paths:
         return jsonify({"success": False, "error": "ファイルのアップロードに失敗しました"}), 400
@@ -154,8 +183,12 @@ def post_with_media():
 
     results = {}
     for platform, content in posts.items():
-        result = sns_client.post_with_media_to_platform(platform, content, media_files)
-        results[platform] = result
+        try:
+            result = sns_client.post_with_media_to_platform(platform, content, media_files)
+            results[platform] = result
+        except Exception as e:
+            logger.error(f"プラットフォーム {platform} へのメディア付き投稿でエラー発生: {e}")
+            results[platform] = {"success": False, "error": f"投稿処理中にエラーが発生しました: {str(e)}"}
 
     # 全体の成功・失敗を判定
     all_success = all(result.get("success", False) for result in results.values())
@@ -180,17 +213,35 @@ def schedule_post():
     # 予約時間のログ出力
     logger.info(f"受信した予約時間: {scheduled_time}")
 
+    # 投稿モードを取得
+    post_mode = data.get('post_mode', 'unified')
+    logger.info(f"投稿モード: {post_mode}")
+
     # 投稿コンテンツを取得
-    content = data.get('content', "")
+    content = ""
+    if post_mode == 'unified':
+        # 一括モードの場合、共通のコンテンツを使用
+        content = data.get('content', "")
+        logger.info(f"一括モードのコンテンツ: {content[:50]}...")
+    else:
+        # 個別モードの場合、プラットフォームごとのコンテンツを辞書として保存
+        content = {}
+        for platform in ["bluesky", "x", "threads", "misskey", "mastodon"]:
+            if platform in data and data[platform].get("selected"):
+                content[platform] = data[platform].get("content", "")
+                logger.info(f"個別モード: {platform}のコンテンツ: {content[platform][:50]}...")
 
     # プラットフォーム情報を取得
     platforms = {}
     for platform in ["bluesky", "x", "threads", "misskey", "mastodon"]:
         if platform in data and data[platform].get("selected"):
+            # プラットフォーム情報にコンテンツを明示的に含める
+            platform_content = data[platform].get("content", "")
             platforms[platform] = {
                 "selected": True,
-                "content": data[platform].get("content", "")
+                "content": platform_content
             }
+            logger.info(f"{platform}のプラットフォーム情報を設定: コンテンツ長 {len(platform_content)}")
 
     if not platforms:
         return jsonify({"success": False, "error": "投稿先のSNSが選択されていません"}), 400
@@ -205,7 +256,8 @@ def schedule_post():
         content=content,
         platforms=platforms,
         scheduled_time=scheduled_time,
-        media_paths=media_paths
+        media_paths=media_paths,
+        post_mode=post_mode
     )
 
     return jsonify({
@@ -350,9 +402,6 @@ def set_post_now(post_id):
             }), 404
 
         # SQLAlchemyを使って直接投稿のscheduled_timeを更新
-        from sqlalchemy import update
-        from models import ScheduledPost, engine
-
         conn = engine.connect()
         stmt = update(ScheduledPost).where(ScheduledPost.id == post_id).values(scheduled_time=now)
         conn.execute(stmt)
@@ -368,7 +417,149 @@ def set_post_now(post_id):
         logger.error(f"投稿時間更新エラー: {e}")
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": str(e),
+        }), 500
+
+# 管理用API: 予約投稿を即時に実行する（デバッグ用）
+@app.route('/api/debug/execute-scheduled-post/<int:post_id>', methods=['POST'])
+def execute_scheduled_post(post_id):
+    """指定された予約投稿を即時に実行する（デバッグ用）"""
+    try:
+        logger.info(f"投稿ID {post_id} の即時実行を開始")
+
+        # データベースに接続
+        db = ScheduledPostDB()
+
+        # 投稿を取得
+        posts = db.get_all_scheduled_posts()
+        post = next((p for p in posts if p['id'] == post_id), None)
+
+        if not post:
+            return jsonify({
+                "success": False,
+                "error": f"投稿ID {post_id} が見つかりません"
+            }), 404
+
+        # 投稿データの準備
+        try:
+            # 詳細なログ出力
+            logger.info(f"投稿データ: {post}")
+
+            # JSONデータのデコード
+            platforms = json.loads(post['platforms']) if isinstance(post['platforms'], str) else post['platforms']
+            content = post['content']
+            post_mode = post.get('post_mode', 'unified')
+
+            logger.info(f"投稿モード: {post_mode}")
+            logger.info(f"プラットフォーム情報: {platforms}")
+            logger.info(f"コンテンツ情報: {content if isinstance(content, str) else 'オブジェクト'}")
+
+            # メディアパスを取得（存在する場合）
+            media_paths = None
+            if post.get('media_paths'):
+                media_paths = json.loads(post['media_paths']) if isinstance(post['media_paths'], str) else post['media_paths']
+                logger.info(f"メディア情報: {media_paths}")
+
+            # 投稿するプラットフォームの準備
+            post_data = {}
+            for platform, platform_content in platforms.items():
+                if isinstance(platform_content, dict) and platform_content.get('selected'):
+                    post_data[platform] = platform_content
+                    logger.info(f"{platform}が選択されています: {platform_content}")
+
+            if not post_data:
+                return jsonify({
+                    "success": False,
+                    "error": "投稿先のプラットフォームが選択されていません"
+                }), 400
+
+            # 各プラットフォームへの投稿実行
+            results = {}
+            success = True
+
+            for platform, platform_data in post_data.items():
+                try:
+                    # プラットフォームごとのコンテンツ取得
+                    platform_content = None
+
+                    # データから直接コンテンツを取得
+                    if isinstance(platform_data, dict) and 'content' in platform_data:
+                        platform_content = platform_data['content']
+                        logger.info(f"プラットフォーム情報から直接コンテンツを取得: {platform} -> {platform_content[:50]}...")
+                    # 個別投稿モードの場合
+                    elif post_mode == 'individual' and isinstance(content, dict) and platform in content:
+                        platform_content = content[platform]
+                        logger.info(f"個別モードからコンテンツを取得: {platform} -> {platform_content[:50]}...")
+                    # 一括投稿モードの場合
+                    elif post_mode == 'unified':
+                        if isinstance(content, str):
+                            platform_content = content
+                        elif isinstance(content, dict) and 'text' in content:
+                            platform_content = content['text']
+                        else:
+                            platform_content = str(content)
+                        logger.info(f"一括モードからコンテンツを取得: {platform} -> {platform_content[:50]}...")
+
+                    if not platform_content or not platform_content.strip():
+                        error_msg = f"プラットフォーム {platform} のコンテンツが空です"
+                        logger.error(error_msg)
+                        results[platform] = {"success": False, "error": error_msg}
+                        success = False
+                        continue
+
+                    # メディア付き投稿または通常投稿
+                    if media_paths and media_paths.get('files'):
+                        result = sns_client.post_with_media_to_platform(
+                            platform,
+                            platform_content,
+                            media_paths['files']
+                        )
+                    else:
+                        result = sns_client.post_to_platform(platform, platform_content)
+
+                    results[platform] = result
+
+                    if not result.get('success'):
+                        logger.error(f"プラットフォーム {platform} への投稿に失敗: {result.get('error')}")
+                        success = False
+                    else:
+                        logger.info(f"プラットフォーム {platform} への投稿に成功")
+
+                except Exception as e:
+                    error_msg = f"プラットフォーム {platform} への投稿でエラー発生: {e}"
+                    logger.error(error_msg)
+                    results[platform] = {"success": False, "error": error_msg}
+                    success = False
+
+            # 投稿状態の更新
+            final_status = 'completed' if success else 'failed'
+            db.update_post_status(post['id'], final_status)
+            logger.info(f"投稿ID {post['id']} の状態を {final_status} に更新しました")
+
+            return jsonify({
+                "success": success,
+                "message": "投稿処理が完了しました",
+                "status": final_status,
+                "results": results
+            })
+
+        except json.JSONDecodeError as e:
+            error_msg = f"JSONデコードエラー: {e}"
+            logger.error(error_msg)
+            db.update_post_status(post['id'], 'failed')
+            return jsonify({"success": False, "error": error_msg}), 500
+        except Exception as e:
+            error_msg = f"投稿処理中の予期せぬエラー: {e}"
+            logger.error(error_msg)
+            db.update_post_status(post['id'], 'failed')
+            return jsonify({"success": False, "error": error_msg}), 500
+
+    except Exception as e:
+        error_msg = f"投稿実行エラー: {e}"
+        logger.error(error_msg)
+        return jsonify({
+            "success": False,
+            "error": error_msg
         }), 500
 
 if __name__ == '__main__':

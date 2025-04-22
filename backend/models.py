@@ -18,11 +18,11 @@ logger = logging.getLogger("ScheduledPostDB")
 load_dotenv()
 
 # データベース接続情報を取得
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@postgres:5432/sns_poster")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/sns_poster")
 logger.info(f"データベース接続URL: {DATABASE_URL}")
 
 # SQLAlchemyの設定
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 Base = declarative_base()
 Session = sessionmaker(bind=engine)
 
@@ -37,6 +37,27 @@ class ScheduledPost(Base):
     status = Column(String, default='pending')
     created_at = Column(String, nullable=False)
     media_paths = Column(Text, nullable=True)
+    post_mode = Column(String, default='unified')
+
+def ensure_utc(dt):
+    """日時をUTCに変換する"""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.astimezone(datetime.timezone.utc)
+
+def jst_to_utc(jst_dt):
+    """JSTの日時をUTCに変換する"""
+    jst = datetime.timezone(datetime.timedelta(hours=9))
+    if jst_dt.tzinfo is None:
+        jst_dt = jst_dt.replace(tzinfo=jst)
+    return jst_dt.astimezone(datetime.timezone.utc)
+
+def utc_to_jst(utc_dt):
+    """UTCの日時をJSTに変換する"""
+    jst = datetime.timezone(datetime.timedelta(hours=9))
+    if utc_dt.tzinfo is None:
+        utc_dt = utc_dt.replace(tzinfo=datetime.timezone.utc)
+    return utc_dt.astimezone(jst)
 
 # データベースのテーブル作成
 def create_tables():
@@ -50,23 +71,28 @@ def create_tables():
 class ScheduledPostDB:
     def __init__(self):
         logger.info(f"データベース接続URL: {DATABASE_URL}")
-        self.db_path = DATABASE_URL  # SQLite互換のために属性を残す
         self.session = Session()
 
-    def add_scheduled_post(self, content, platforms, scheduled_time, media_paths=None):
+    def add_scheduled_post(self, content, platforms, scheduled_time, media_paths=None, post_mode='unified'):
         try:
-            now = datetime.datetime.now().isoformat()
+            # 現在時刻をUTCで取得
+            now = ensure_utc(datetime.datetime.now()).isoformat()
 
             # 予約時間のフォーマットを標準化
             try:
-                # 日時文字列をdatetimeオブジェクトに変換
-                scheduled_dt = datetime.datetime.fromisoformat(scheduled_time)
-                # ISO形式に変換して保存
-                scheduled_time_iso = scheduled_dt.isoformat()
-                logger.info(f"予約時間を標準化: 元の形式={scheduled_time}, 標準化={scheduled_time_iso}")
+                # 入力された時間をJSTとして解釈
+                jst = datetime.timezone(datetime.timedelta(hours=9))
+                scheduled_dt = datetime.datetime.fromisoformat(scheduled_time.replace('Z', '+09:00'))
+                if scheduled_dt.tzinfo is None:
+                    scheduled_dt = scheduled_dt.replace(tzinfo=jst)
+
+                # JSTからUTCに変換
+                scheduled_dt_utc = scheduled_dt.astimezone(datetime.timezone.utc)
+                scheduled_time_iso = scheduled_dt_utc.isoformat()
+
+                logger.info(f"予約時間を標準化: JST={scheduled_dt.isoformat()}, UTC={scheduled_time_iso}")
             except (ValueError, TypeError) as e:
                 logger.error(f"予約時間の変換に失敗しました: {e}")
-                # エラーの場合は元の形式のまま使用
                 scheduled_time_iso = scheduled_time
 
             # オブジェクトをJSON文字列に変換
@@ -77,17 +103,13 @@ class ScheduledPostDB:
             if isinstance(media_paths, (dict, list)):
                 media_paths = json.dumps(media_paths, ensure_ascii=False)
 
-            logger.info(f"保存するコンテンツ: {content}")
-            logger.info(f"保存するプラットフォーム: {platforms}")
-            logger.info(f"保存するメディアパス: {media_paths}")
-            logger.info(f"保存する予約時間: {scheduled_time_iso}")
-
             new_post = ScheduledPost(
                 content=content,
                 platforms=platforms,
                 scheduled_time=scheduled_time_iso,
                 created_at=now,
-                media_paths=media_paths
+                media_paths=media_paths,
+                post_mode=post_mode
             )
 
             self.session.add(new_post)
@@ -103,48 +125,50 @@ class ScheduledPostDB:
 
     def get_pending_posts(self):
         try:
-            now = datetime.datetime.now()
+            # 現在時刻をUTCで取得
+            now = ensure_utc(datetime.datetime.now())
             now_iso = now.isoformat()
             logger.info(f"現在時刻（データベース検索用）: {now_iso}")
 
-            # まずすべての投稿を取得して時間を表示
-            all_posts = self.session.query(ScheduledPost).all()
-            for post in all_posts:
-                logger.info(f"投稿情報: ID={post.id}, 時間={post.scheduled_time}, ステータス={post.status}")
-                try:
-                    # 予約時間をdatetimeオブジェクトに変換して比較
-                    scheduled_dt = datetime.datetime.fromisoformat(post.scheduled_time)
-                    time_diff = (scheduled_dt - now).total_seconds()
-                    is_past = time_diff <= 0
-                    logger.info(f"  投稿の予約時間分析: 過去の時間={is_past}, 時間差={time_diff}秒")
-                except (ValueError, TypeError) as e:
-                    logger.error(f"  日時変換エラー: {e}")
-
             # ステータスが'pending'の投稿を全て取得
-            posts = []
-            for post in all_posts:
-                if post.status == 'pending':
-                    logger.info(f"処理対象の投稿を追加: ID={post.id}, 予約時間={post.scheduled_time}")
-                    posts.append(post)
+            posts = self.session.query(ScheduledPost).filter(
+                ScheduledPost.status == 'pending'
+            ).all()
 
             # 辞書形式に変換
             result_posts = []
             for post in posts:
-                post_dict = {
-                    'id': post.id,
-                    'content': post.content,
-                    'platforms': post.platforms,
-                    'scheduled_time': post.scheduled_time,
-                    'status': post.status,
-                    'created_at': post.created_at,
-                    'media_paths': post.media_paths
-                }
-                result_posts.append(post_dict)
+                try:
+                    # 予約時間の文字列を処理
+                    scheduled_time_str = post.scheduled_time
+                    if 'Z' in scheduled_time_str:
+                        scheduled_time_str = scheduled_time_str.replace('Z', '+00:00')
+                    elif '+' not in scheduled_time_str and '-' not in scheduled_time_str:
+                        scheduled_time_str = scheduled_time_str + '+00:00'
 
-            if result_posts:
-                logger.info(f"条件に合致する投稿が{len(result_posts)}件見つかりました")
-            else:
-                logger.info("条件に合致する投稿はありません")
+                    # 予約時間をUTCのdatetimeオブジェクトに変換
+                    scheduled_dt = datetime.datetime.fromisoformat(scheduled_time_str)
+                    scheduled_dt = ensure_utc(scheduled_dt)
+                    time_diff = (scheduled_dt - now).total_seconds()
+
+                    logger.info(f"投稿ID: {post.id}, 予約時間: {scheduled_dt.isoformat()}, 現在時刻との差: {time_diff}秒")
+
+                    # 過去の予約時間の投稿のみを処理対象に追加
+                    if time_diff <= 0:
+                        post_dict = {
+                            'id': post.id,
+                            'content': post.content,
+                            'platforms': post.platforms,
+                            'scheduled_time': scheduled_dt.isoformat(),
+                            'status': post.status,
+                            'created_at': post.created_at,
+                            'media_paths': post.media_paths,
+                            'post_mode': post.post_mode
+                        }
+                        result_posts.append(post_dict)
+                        logger.info(f"処理対象の投稿を追加: ID={post.id}, 予約時間={scheduled_dt.isoformat()}")
+                except (ValueError, TypeError) as e:
+                    logger.error(f"日時変換エラー: {e}, 投稿ID={post.id}, 時間文字列={post.scheduled_time}")
 
             return result_posts
         except Exception as e:
@@ -172,16 +196,24 @@ class ScheduledPostDB:
             # 辞書形式に変換
             result_posts = []
             for post in posts:
-                post_dict = {
-                    'id': post.id,
-                    'content': post.content,
-                    'platforms': post.platforms,
-                    'scheduled_time': post.scheduled_time,
-                    'status': post.status,
-                    'created_at': post.created_at,
-                    'media_paths': post.media_paths
-                }
-                result_posts.append(post_dict)
+                try:
+                    # UTCの時間をJSTに変換
+                    scheduled_dt = datetime.datetime.fromisoformat(post.scheduled_time.replace('Z', '+00:00'))
+                    scheduled_dt = ensure_utc(scheduled_dt)
+                    scheduled_jst = utc_to_jst(scheduled_dt)
+
+                    post_dict = {
+                        'id': post.id,
+                        'content': post.content,
+                        'platforms': post.platforms,
+                        'scheduled_time': scheduled_jst.isoformat(),  # JSTで表示
+                        'status': post.status,
+                        'created_at': post.created_at,
+                        'media_paths': post.media_paths
+                    }
+                    result_posts.append(post_dict)
+                except (ValueError, TypeError) as e:
+                    logger.error(f"日時変換エラー: {e}, 投稿ID={post.id}")
 
             return result_posts
         except Exception as e:

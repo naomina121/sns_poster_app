@@ -269,19 +269,19 @@ function setupIndividualCounters() {
     });
 }
 
-// 投稿モードの切り替え
+// モード切り替え
 function switchMode(mode) {
     postMode = mode;
 
-    // ボタンの状態更新
+    // モード切り替えボタンのスタイル更新
     document.getElementById('unified-mode-btn').classList.toggle('active', mode === 'unified');
     document.getElementById('individual-mode-btn').classList.toggle('active', mode === 'individual');
 
-    // モードに応じたUI表示切り替え
-    document.getElementById('unified-mode').classList.toggle('hidden', mode !== 'unified');
-    document.getElementById('individual-mode').classList.toggle('hidden', mode !== 'individual');
+    // モードに応じたUIの表示/非表示
+    document.getElementById('unified-mode').style.display = mode === 'unified' ? 'block' : 'none';
+    document.getElementById('individual-mode').style.display = mode === 'individual' ? 'block' : 'none';
 
-    // 個別投稿モードの場合、UIを更新
+    // 個別モードの場合、選択されたプラットフォームのUIを更新
     if (mode === 'individual') {
         updateIndividualPosts();
     }
@@ -611,180 +611,107 @@ async function deleteScheduledPost(postId) {
 
 // 投稿処理
 async function handlePost() {
-    // 投稿ボタンを無効化
-    const postButton = document.getElementById('post-button');
-    postButton.disabled = true;
-    postButton.textContent = '投稿中...';
-
     try {
         // 選択されたプラットフォームを取得
         const selectedPlatforms = Array.from(document.querySelectorAll('.platform-card.selected'))
             .map(card => card.dataset.platform);
 
         if (selectedPlatforms.length === 0) {
-            throw new Error('投稿先のSNSを選択してください');
+            showError('投稿先のSNSを選択してください');
+            return;
         }
 
         // 投稿データの準備
-        const postData = {};
+        const postData = {
+            post_mode: postMode
+        };
 
+        // 一括モードの場合
         if (postMode === 'unified') {
-            // 一括投稿モードの場合
-            const content = document.getElementById('unified-content').value;
+            const unifiedContent = document.getElementById('unified-content').value;
+            if (!unifiedContent.trim()) {
+                showError('投稿内容が空です');
+                return;
+            }
+            postData.content = unifiedContent;
+        }
+
+        // プラットフォームごとのデータを設定
+        selectedPlatforms.forEach(platform => {
+            let content = '';
+
+            if (postMode === 'unified') {
+                // 一括モードの場合、共通のテキストを使用
+                content = document.getElementById('unified-content').value;
+            } else {
+                // 個別モードの場合、プラットフォームごとのテキストを使用
+                const textarea = document.querySelector(`.individual-content[data-platform="${platform}"]`);
+                content = textarea ? textarea.value : '';
+            }
 
             if (!content.trim()) {
-                throw new Error('投稿内容を入力してください');
+                showError(`${platform}の投稿内容が空です`);
+                return;
             }
 
-            // 全選択プラットフォームに同じ内容を設定
-            selectedPlatforms.forEach(platform => {
-                postData[platform] = {
-                    selected: true,
-                    content: content
-                };
-            });
-        } else {
-            // 個別投稿モードの場合
-            selectedPlatforms.forEach(platform => {
-                const textarea = document.querySelector(`.individual-content[data-platform="${platform}"]`);
-                const content = textarea ? textarea.value : '';
+            postData[platform] = {
+                selected: true,
+                content: content
+            };
+        });
 
-                postData[platform] = {
-                    selected: true,
-                    content: content
-                };
-
-                // 内容が空の場合はエラー
-                if (!content.trim()) {
-                    throw new Error(`${platform.charAt(0).toUpperCase() + platform.slice(1)}の投稿内容を入力してください`);
-                }
-            });
+        // メディアファイルがある場合は追加
+        if (uploadedMediaFiles.length > 0) {
+            postData.media_files = uploadedMediaFiles.map(file => file.path);
         }
 
-        // メディアファイルがあるかどうかチェック
-        const hasMedia = uploadedMediaFiles.length > 0;
-
-        // 予約投稿かどうかをチェック
+        // 予約投稿の場合
         if (isScheduled) {
             const scheduledTime = document.getElementById('scheduled-time').value;
-
             if (!scheduledTime) {
-                throw new Error('予約投稿の日時を指定してください');
+                showError('予約時間を指定してください');
+                return;
             }
 
-            // 現在の時刻よりも未来かをチェック
-            const scheduledDate = new Date(scheduledTime);
-            const now = new Date();
+            postData.scheduled_time = scheduledTime;
+            const response = await fetch(API_URL.SCHEDULE, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(postData)
+            });
 
-            if (scheduledDate <= now) {
-                throw new Error('予約時間は現在以降の時間を指定してください');
+            if (!response.ok) {
+                throw new Error('予約投稿に失敗しました');
             }
 
-            // 予約投稿データを準備
-            let unifiedContent = postMode === 'unified' ? document.getElementById('unified-content').value : null;
-
-            const scheduleData = {
-                ...postData,
-                scheduled_time: scheduledTime,
-                content: unifiedContent,
-                media_files: uploadedMediaFiles.map(file => file.path)
-            };
-
-            console.log('送信する予約投稿データ:', JSON.stringify(scheduleData));
-
-            try {
-                // 予約投稿 APIにリクエスト送信
-                const response = await fetch(API_URL.SCHEDULE, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(scheduleData)
-                });
-
-                if (!response.ok) {
-                    const responseText = await response.text();
-                    throw new Error(`予約投稿に失敗しました: ${responseText}`);
-                }
-
-                const result = await response.json();
-
-                if (!result.success) {
-                    throw new Error(result.error || '予約投稿に失敗しました');
-                }
-
-                // ステータス表示
-                showSuccess(`${new Date(scheduledTime).toLocaleString('ja-JP')}に投稿が予約されました`);
-
-                // フォームをリセット
-                resetForm();
-
-                // 予約投稿一覧を更新
-                fetchScheduledPosts();
-            } catch (error) {
-                showError(`予約投稿に失敗しました: ${error.message}`);
-            }
+            const result = await response.json();
+            showSuccess('投稿が予約されました');
+            fetchScheduledPosts();  // 予約投稿一覧を更新
         } else {
-            // 通常投稿（予約なし）
-            try {
-                let response;
+            // 即時投稿の場合
+            const endpoint = uploadedMediaFiles.length > 0 ? API_URL.POST_WITH_MEDIA : API_URL.POST;
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(postData)
+            });
 
-                // メディアありの場合はPOST_WITH_MEDIAエンドポイントを使用
-                if (hasMedia) {
-                    // メディアファイルのパスを配列にまとめる
-                    const mediaFiles = uploadedMediaFiles.map(file => file.path);
-
-                    const mediaPostData = {
-                        ...postData,
-                        media_files: mediaFiles
-                    };
-
-                    response = await fetch(API_URL.POST_WITH_MEDIA, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(mediaPostData)
-                    });
-                } else {
-                    // メディアなしの場合は通常のPOSTエンドポイントを使用
-                    response = await fetch(API_URL.POST, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(postData)
-                    });
-                }
-
-                if (!response.ok) {
-                    const responseText = await response.text();
-                    throw new Error(`投稿に失敗しました: ${responseText}`);
-                }
-
-                const result = await response.json();
-
-                if (!result.success) {
-                    throw new Error('投稿に失敗しました');
-                }
-
-                // 投稿結果を表示
-                showPostResults(result.results);
-
-                // フォームをリセット
-                resetForm();
-
-            } catch (error) {
-                showError(`投稿に失敗しました: ${error.message}`);
+            if (!response.ok) {
+                throw new Error('投稿に失敗しました');
             }
+
+            const result = await response.json();
+            showPostResults(result.results);
         }
+
+        // フォームをリセット
+        resetForm();
     } catch (error) {
         showError(error.message);
-    } finally {
-        // 投稿ボタンを元に戻す
-        const postButton = document.getElementById('post-button');
-        postButton.disabled = false;
-        postButton.textContent = '投稿する';
     }
 }
 
@@ -862,38 +789,52 @@ function resetForm() {
 
 // 成功メッセージの表示
 function showSuccess(message) {
-    const toast = document.createElement('div');
-    toast.className = 'toast success';
-    toast.innerHTML = `
-        <div class="toast-message">${message}</div>
-    `;
+// ステータスコンテナを利用
+const statusContainer = document.getElementById('status-container');
+statusContainer.innerHTML = '';
+statusContainer.classList.remove('hidden');
 
-    document.body.appendChild(toast);
+// 成功メッセージ用のスタイル
+statusContainer.className = 'status-container success-message';
 
-    // 3秒後に消去
+// 結果メッセージ
+const messageDiv = document.createElement('div');
+messageDiv.className = 'status-message';
+messageDiv.innerHTML = `<p>${message}</p>`;
+statusContainer.appendChild(messageDiv);
+
+// 5秒後に消去
     setTimeout(() => {
-        toast.classList.add('fade-out');
+        statusContainer.classList.add('fade-out');
         setTimeout(() => {
-            document.body.removeChild(toast);
+            statusContainer.classList.add('hidden');
+            statusContainer.classList.remove('fade-out');
         }, 300);
-    }, 3000);
+    }, 5000);
 }
 
 // エラーメッセージの表示
 function showError(message) {
-    const toast = document.createElement('div');
-    toast.className = 'toast error';
-    toast.innerHTML = `
-        <div class="toast-message">${message}</div>
-    `;
+// ステータスコンテナを利用
+const statusContainer = document.getElementById('status-container');
+statusContainer.innerHTML = '';
+statusContainer.classList.remove('hidden');
 
-    document.body.appendChild(toast);
+// エラーメッセージ用のスタイル
+statusContainer.className = 'status-container error-message';
 
-    // 5秒後に消去
+// 結果メッセージ
+const messageDiv = document.createElement('div');
+messageDiv.className = 'status-message';
+messageDiv.innerHTML = `<p>エラー: ${message}</p>`;
+statusContainer.appendChild(messageDiv);
+
+// 5秒後に消去
     setTimeout(() => {
-        toast.classList.add('fade-out');
+        statusContainer.classList.add('fade-out');
         setTimeout(() => {
-            document.body.removeChild(toast);
+            statusContainer.classList.add('hidden');
+            statusContainer.classList.remove('fade-out');
         }, 300);
     }, 5000);
 }

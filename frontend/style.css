@@ -298,37 +298,95 @@ textarea:focus {
 /* ステータス表示 */
 .status-container {
     margin-top: 25px;
+    background: #f9f9f9;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    transition: all 0.3s ease;
+    border: 1px solid #eaeaea;
+}
+
+.status-container.success-message {
+    background-color: rgba(39, 174, 96, 0.1);
+    border: 1px solid var(--success-color);
+}
+
+.status-container.error-message {
+    background-color: rgba(231, 76, 60, 0.1);
+    border: 1px solid var(--error-color);
 }
 
 .status-container.hidden {
     display: none;
 }
 
+.status-container.fade-out {
+    opacity: 0;
+}
+
+.status-header {
+    padding: 15px 20px;
+    background: var(--primary-color);
+    color: white;
+}
+
+.status-header h3 {
+    font-weight: 500;
+    font-size: 1.1rem;
+    margin: 0;
+}
+
 .status-message {
-    padding: 15px;
-    border-radius: var(--border-radius);
-    margin-bottom: 15px;
+    padding: 20px;
+    text-align: center;
+}
+
+.status-message p {
+    margin: 0;
     font-weight: 500;
 }
 
-.status-success {
-    background-color: rgba(39, 174, 96, 0.1);
-    border: 1px solid var(--success-color);
+.success-message .status-message p {
     color: var(--success-color);
 }
 
-.status-error {
-    background-color: rgba(231, 76, 60, 0.1);
-    border: 1px solid var(--error-color);
+.error-message .status-message p {
     color: var(--error-color);
 }
 
-.platform-result {
-    margin-top: 8px;
-    padding: 12px;
-    border-radius: var(--border-radius);
-    background: #f8f9fa;
-    border: 1px solid #eaeaea;
+.status-list {
+    list-style: none;
+    padding: 0 20px 20px;
+}
+
+.status-item {
+    padding: 12px 15px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.status-item.success {
+    background-color: rgba(39, 174, 96, 0.1);
+    border: 1px solid var(--success-color);
+}
+
+.status-item.error {
+    background-color: rgba(231, 76, 60, 0.1);
+    border: 1px solid var(--error-color);
+}
+
+.status-platform {
+    font-weight: 500;
+}
+
+.status-item.success .status-platform {
+    color: var(--success-color);
+}
+
+.status-item.error .status-platform {
+    color: var(--error-color);
 }
 
 /* メディアアップロードセクション */
