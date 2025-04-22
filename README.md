@@ -5,8 +5,7 @@
 
 ## 概要
 
-![SNS Poster Appの画像](![image](https://github.com/user-attachments/assets/f4e2049a-d666-4b32-a073-da585ecc014f)
-)
+![image](https://github.com/user-attachments/assets/383cb79c-79cc-40c8-b43c-af3ce3113c34)
 
 SNS Poster Appは、複数のSNSアカウント（Bluesky、X/Twitter、Threads、Misskey、Mastodon）を連携させ、一度の操作で複数のプラットフォームに同時投稿できるアプリケーションです。Docker環境で簡単に起動でき、各SNSの文字数制限に対応した投稿フォームを備えています。
 
