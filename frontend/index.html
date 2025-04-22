@@ -3,20 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SNS Poster - 複数SNS同時投稿アプリ</title>
+    <title>SNS Poster v2 - 複数SNS同時投稿アプリ</title>
     <link rel="icon" href="img/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css" title="light" />
+    <link rel="stylesheet" href="style_dark_hls.css" title="dark" disabled />
     <link
       href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap"
       rel="stylesheet"
-      title="light"
     />
-    <link rel="stylesheet" href="style_dark_hls.css" title="dark" disabled />
   </head>
   <body>
     <div class="container">
       <header>
-        <h1>SNS Poster</h1>
+        <h1>SNS Poster v2</h1>
         <p>複数のSNSに同時投稿できるアプリ</p>
         <button id="dark-mode-toggle">ダークモード切り替え</button>
       </header>
@@ -54,6 +53,41 @@
               <!-- JavaScriptで動的に生成 -->
             </div>
           </div>
+
+          <!-- メディアアップロード部分 -->
+          <div class="media-upload-section">
+            <h3>画像追加</h3>
+            <div class="media-upload-container">
+              <div class="media-dropzone" id="media-dropzone">
+                <p>ここにファイルをドラッグ&ドロップするか、クリックして選択</p>
+                <input
+                  type="file"
+                  id="media-input"
+                  multiple
+                  accept="image/*,video/*"
+                  class="hidden"
+                />
+              </div>
+              <div class="media-preview" id="media-preview"></div>
+            </div>
+          </div>
+
+          <!-- 投稿予約部分 -->
+          <div class="schedule-section">
+            <h3>投稿予約</h3>
+            <div class="schedule-toggle">
+              <label for="schedule-toggle">
+                <input type="checkbox" id="schedule-toggle" />
+                日時を指定して投稿する
+              </label>
+            </div>
+            <div id="schedule-options" class="schedule-options hidden">
+              <input type="datetime-local" id="scheduled-time" min="" />
+              <p class="schedule-info">
+                ※予約投稿はサーバーが稼働している時のみ実行されます
+              </p>
+            </div>
+          </div>
         </section>
 
         <section class="action-section">
@@ -65,6 +99,18 @@
             <!-- 投稿結果をここに表示 -->
           </div>
         </section>
+
+        <!-- 予約投稿一覧セクション -->
+        <section class="scheduled-posts-section">
+          <h2>予約済み投稿一覧</h2>
+          <button id="refresh-scheduled-posts" class="refresh-button">
+            更新
+          </button>
+          <div id="scheduled-posts-container" class="scheduled-posts-container">
+            <!-- JavaScriptで動的に生成 -->
+            <p class="no-scheduled-posts">予約済みの投稿はありません</p>
+          </div>
+        </section>
       </main>
 
       <footer>
@@ -72,6 +118,6 @@
       </footer>
     </div>
 
-    <script src="../script.js"></script>
+    <script src="script.js"></script>
   </body>
 </html>

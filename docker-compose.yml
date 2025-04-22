@@ -12,4 +12,23 @@ services:
       - ./backend/.env
     environment:
       - FLASK_DEBUG=1
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/sns_poster
+    depends_on:
+      - postgres
     restart: unless-stopped
+
+  postgres:
+    image: postgres:14-alpine
+    container_name: sns_poster_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=sns_poster
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

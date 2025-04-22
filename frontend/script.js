@@ -4,7 +4,12 @@
 const API_URL = {
     PLATFORMS: '/api/platforms',
     CHARACTER_LIMITS: '/api/character_limits',
-    POST: '/api/post'
+    POST: '/api/post',
+    UPLOAD: '/api/upload',
+    POST_WITH_MEDIA: '/api/post-with-media',
+    SCHEDULE: '/api/schedule',
+    SCHEDULED_POSTS: '/api/scheduled-posts',
+    DELETE_SCHEDULED_POST: '/api/delete-scheduled-post'
 };
 
 // グローバル変数
@@ -12,12 +17,14 @@ let platforms = {}; // 利用可能なプラットフォーム
 let characterLimits = {}; // 文字数制限
 let postMode = 'unified'; // 投稿モード (unified or individual)
 let isDarkMode = false; // ダークモード状態
+let uploadedMediaFiles = []; // アップロードされたメディアファイル
+let isScheduled = false; // 予約投稿モードか通常投稿モードか
 
 // DOMが読み込まれた後に実行
 document.addEventListener('DOMContentLoaded', function() {
     // ダークモードの初期設定
     initDarkMode();
-    
+
     // 初期化
     initApp();
 
@@ -27,9 +34,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 投稿ボタンのイベントリスナー
     document.getElementById('post-button').addEventListener('click', handlePost);
-    
+
     // ダークモード切り替えボタンのイベントリスナー
     document.getElementById('dark-mode-toggle').addEventListener('click', toggleDarkMode);
+
+    // メディアアップロード関連のイベントリスナー設定
+    setupMediaUpload();
+
+    // 予約投稿関連のイベントリスナー設定
+    setupScheduleToggle();
+
+    // 予約投稿一覧の更新ボタンのイベントリスナー
+    document.getElementById('refresh-scheduled-posts').addEventListener('click', fetchScheduledPosts);
+
+    // 初期表示時に予約投稿一覧を取得
+    fetchScheduledPosts();
 });
 
 // ダークモード初期設定
@@ -37,10 +56,10 @@ function initDarkMode() {
     // ローカルストレージからダークモード設定を取得
     const savedMode = localStorage.getItem('darkMode');
     isDarkMode = savedMode === 'true';
-    
+
     // ダークモードボタンのテキスト更新
     updateDarkModeButtonText();
-    
+
     // ダークモード適用
     applyDarkMode(isDarkMode);
 }
@@ -48,13 +67,13 @@ function initDarkMode() {
 // ダークモードの切り替え
 function toggleDarkMode() {
     isDarkMode = !isDarkMode;
-    
+
     // ローカルストレージに設定を保存
     localStorage.setItem('darkMode', isDarkMode);
-    
+
     // ダークモードボタンのテキスト更新
     updateDarkModeButtonText();
-    
+
     // ダークモード適用
     applyDarkMode(isDarkMode);
 }
@@ -69,7 +88,7 @@ function updateDarkModeButtonText() {
 function applyDarkMode(enable) {
     const lightStylesheet = document.querySelector('link[title="light"]');
     const darkStylesheet = document.querySelector('link[title="dark"]');
-    
+
     if (enable) {
         lightStylesheet.disabled = true;
         darkStylesheet.disabled = false;
@@ -268,6 +287,328 @@ function switchMode(mode) {
     }
 }
 
+// メディアアップロード関連の設定
+function setupMediaUpload() {
+    const dropzone = document.getElementById('media-dropzone');
+    const mediaInput = document.getElementById('media-input');
+    const preview = document.getElementById('media-preview');
+
+    // クリックでファイル選択
+    dropzone.addEventListener('click', () => mediaInput.click());
+
+    // ドラッグ＆ドロップイベントリスナー
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add('dragover');
+    });
+
+    dropzone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('dragover');
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('dragover');
+
+        if (e.dataTransfer.files.length > 0) {
+            handleFiles(e.dataTransfer.files);
+        }
+    });
+
+    // ファイル入力の変更イベント
+    mediaInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleFiles(e.target.files);
+        }
+    });
+}
+
+// ファイル処理
+async function handleFiles(files) {
+    // ファイル数の検証（最大4枚まで）
+    if (uploadedMediaFiles.length + files.length > 4) {
+        showError('アップロードできるメディアは最大4つまでです');
+        return;
+    }
+
+    const preview = document.getElementById('media-preview');
+
+    // FormDataの準備
+    const formData = new FormData();
+
+    // ファイルをFormDataに追加
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        formData.append('files[]', file);
+
+        // ファイルタイプをチェック（画像か動画のみ許可）
+        if (!file.type.match('image.*') && !file.type.match('video.*')) {
+            showError('画像または動画ファイルのみアップロードできます');
+            return;
+        }
+    }
+
+    try {
+        // アップロード中の表示
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'media-loading';
+        loadingDiv.innerHTML = '<p>アップロード中...</p>';
+        preview.appendChild(loadingDiv);
+
+        // APIにアップロード
+        const response = await fetch(API_URL.UPLOAD, {
+            method: 'POST',
+            body: formData
+        });
+
+        // アップロード中の表示を削除
+        loadingDiv.remove();
+
+        if (!response.ok) {
+            throw new Error('アップロードに失敗しました');
+        }
+
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'アップロードに失敗しました');
+        }
+
+        // アップロードされたファイル情報を保存
+        uploadedMediaFiles = uploadedMediaFiles.concat(result.files);
+
+        // プレビュー表示を更新
+        updateMediaPreview();
+
+    } catch (error) {
+        showError('ファイルのアップロードに失敗しました: ' + error.message);
+    }
+}
+
+// メディアプレビューの更新
+function updateMediaPreview() {
+    const preview = document.getElementById('media-preview');
+    preview.innerHTML = '';
+
+    if (uploadedMediaFiles.length === 0) {
+        return;
+    }
+
+    uploadedMediaFiles.forEach((file, index) => {
+        const mediaItem = document.createElement('div');
+        mediaItem.className = 'media-item';
+
+        // 画像か動画かによって表示を分ける
+        if (file.type.startsWith('image/')) {
+            mediaItem.innerHTML = `
+                <img src="/uploads/${file.path.split('/').pop()}" alt="${file.name}">
+                <button class="remove-media" data-index="${index}">×</button>
+            `;
+        } else if (file.type.startsWith('video/')) {
+            mediaItem.innerHTML = `
+                <video controls>
+                    <source src="/uploads/${file.path.split('/').pop()}" type="${file.type}">
+                </video>
+                <button class="remove-media" data-index="${index}">×</button>
+            `;
+        }
+
+        preview.appendChild(mediaItem);
+    });
+
+    // 削除ボタンのイベントリスナー
+    document.querySelectorAll('.remove-media').forEach(button => {
+        button.addEventListener('click', function() {
+            const index = parseInt(this.dataset.index);
+            uploadedMediaFiles.splice(index, 1);
+            updateMediaPreview();
+        });
+    });
+}
+
+// 予約投稿トグルのセットアップ
+function setupScheduleToggle() {
+    const scheduleToggle = document.getElementById('schedule-toggle');
+    const scheduleOptions = document.getElementById('schedule-options');
+    const scheduledTimeInput = document.getElementById('scheduled-time');
+
+    // 現在の日時を取得して、日時入力の最小値を設定
+    const now = new Date();
+    const timezoneOffset = now.getTimezoneOffset() * 60000;
+    const localISOTime = (new Date(now - timezoneOffset)).toISOString().slice(0, 16);
+    scheduledTimeInput.min = localISOTime;
+
+    // トグルでオプション表示/非表示を切り替え
+    scheduleToggle.addEventListener('change', function() {
+        scheduleOptions.classList.toggle('hidden', !this.checked);
+        isScheduled = this.checked;
+    });
+}
+
+// 予約投稿一覧の取得と表示
+async function fetchScheduledPosts() {
+    try {
+        const container = document.getElementById('scheduled-posts-container');
+        container.innerHTML = '<p class="loading">読み込み中...</p>';
+
+        const response = await fetch(API_URL.SCHEDULED_POSTS);
+        if (!response.ok) {
+            throw new Error('予約投稿の取得に失敗しました');
+        }
+
+        const result = await response.json();
+
+        // 予約投稿一覧を表示
+        renderScheduledPosts(result.posts);
+
+    } catch (error) {
+        document.getElementById('scheduled-posts-container').innerHTML =
+            `<p class="error">エラー: ${error.message}</p>`;
+    }
+}
+
+// 予約投稿一覧の表示
+function renderScheduledPosts(posts) {
+    const container = document.getElementById('scheduled-posts-container');
+    container.innerHTML = '';
+
+    console.log('受け取った予約投稿:', posts); // デバッグ用ログ
+
+    if (!posts || posts.length === 0) {
+        container.innerHTML = '<p class="no-scheduled-posts">予約済みの投稿はありません</p>';
+        return;
+    }
+
+    posts.forEach(post => {
+        console.log('各投稿データ:', post); // 各投稿情報のデバッグ
+
+        // プラットフォーム情報の取得と品質チェック
+        let platforms = {};
+        try {
+            if (typeof post.platforms === 'string') {
+                platforms = JSON.parse(post.platforms);
+            } else if (typeof post.platforms === 'object') {
+                platforms = post.platforms;
+            }
+            console.log('パースしたプラットフォーム情報:', platforms);
+        } catch (e) {
+            console.error('プラットフォーム情報の解析に失敗:', e);
+            platforms = {};
+        }
+
+        // プラットフォーム名を取得
+        const platformNames = Object.keys(platforms)
+            .filter(p => platforms[p] && platforms[p].selected)
+            .map(p => p.charAt(0).toUpperCase() + p.slice(1))
+            .join(', ');
+
+        console.log('表示するプラットフォーム名:', platformNames);
+
+        // 日時のフォーマット
+        const scheduledDate = new Date(post.scheduled_time);
+        const formattedDate = `${scheduledDate.getFullYear()}/${(scheduledDate.getMonth() + 1).toString().padStart(2, '0')}/${scheduledDate.getDate().toString().padStart(2, '0')} ${scheduledDate.getHours().toString().padStart(2, '0')}:${scheduledDate.getMinutes().toString().padStart(2, '0')}`;
+
+        // 投稿内容のテキスト処理
+        let contentText = '';
+        try {
+            // 全てのプラットフォームが同じ内容の場合は最初のプラットフォームの内容を表示
+            if (typeof post.content === 'string') {
+                try {
+                    const contentObj = JSON.parse(post.content);
+                    // JSONとしてパースできる場合はその最初のプラットフォームの内容を表示
+                    if (typeof contentObj === 'object') {
+                        contentText = Object.values(contentObj)[0] || '';
+                    } else {
+                        contentText = contentObj;
+                    }
+                } catch {
+                    // JSONとしてパースできない場合はそのまま文字列として表示
+                    contentText = post.content;
+                }
+            } else if (typeof post.content === 'object') {
+                // オブジェクトの場合は最初のプラットフォームの内容を表示
+                contentText = Object.values(post.content)[0] || '';
+            }
+
+            // もしcontentがプラットフォームごとに分かれている場合、最初のプラットフォームの内容を表示
+            if (!contentText && platforms) {
+                const firstPlatform = Object.keys(platforms)[0];
+                if (firstPlatform && platforms[firstPlatform] && platforms[firstPlatform].content) {
+                    contentText = platforms[firstPlatform].content;
+                }
+            }
+
+            console.log('表示するコンテンツ:', contentText);
+        } catch (e) {
+            console.error('コンテンツの解析エラー:', e);
+            contentText = '内容の読み込みエラー';
+        }
+
+        // 投稿ステータスに応じたクラス
+        const statusClass = post.status === 'completed' ? 'completed' :
+                           post.status === 'failed' ? 'failed' : 'pending';
+
+        // 投稿ステータスの日本語表示
+        const statusText = post.status === 'completed' ? '完了' :
+                          post.status === 'failed' ? '失敗' : '待機中';
+
+        // メディア情報（あれば）
+        const hasMedia = post.media_paths && post.media_paths.files && post.media_paths.files.length > 0;
+
+        const postItem = document.createElement('div');
+        postItem.className = `scheduled-post-item ${statusClass}`;
+        postItem.innerHTML = `
+            <div class="scheduled-post-header">
+                <div class="scheduled-time">${formattedDate}</div>
+                <div class="scheduled-status ${statusClass}">${statusText}</div>
+            </div>
+            <div class="scheduled-post-content">
+                <div class="scheduled-platforms">投稿先: ${platformNames}</div>
+                <div class="scheduled-text">${contentText.length > 100 ? contentText.slice(0, 100) + '...' : contentText}</div>
+                ${hasMedia ? '<div class="scheduled-media-info">メディア: あり</div>' : ''}
+            </div>
+            <div class="scheduled-post-actions">
+                <button class="delete-scheduled-post" data-id="${post.id}">削除</button>
+            </div>
+        `;
+
+        container.appendChild(postItem);
+    });
+
+    // 削除ボタンのイベントリスナーを設定
+    document.querySelectorAll('.delete-scheduled-post').forEach(button => {
+        button.addEventListener('click', async function() {
+            if (confirm('この予約投稿を削除してもよろしいですか？')) {
+                const postId = this.dataset.id;
+                await deleteScheduledPost(postId);
+                fetchScheduledPosts(); // 一覧を更新
+            }
+        });
+    });
+}
+
+// 予約投稿の削除
+async function deleteScheduledPost(postId) {
+    try {
+        const response = await fetch(`${API_URL.DELETE_SCHEDULED_POST}/${postId}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            throw new Error('予約投稿の削除に失敗しました');
+        }
+
+        showSuccess('予約投稿を削除しました');
+
+    } catch (error) {
+        showError('予約投稿の削除に失敗しました: ' + error.message);
+    }
+}
+
 // 投稿処理
 async function handlePost() {
     // 投稿ボタンを無効化
@@ -320,72 +661,239 @@ async function handlePost() {
             });
         }
 
-        // APIに投稿リクエスト送信
-        const response = await fetch(API_URL.POST, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(postData)
-        });
+        // メディアファイルがあるかどうかチェック
+        const hasMedia = uploadedMediaFiles.length > 0;
 
-        const result = await response.json();
+        // 予約投稿かどうかをチェック
+        if (isScheduled) {
+            const scheduledTime = document.getElementById('scheduled-time').value;
 
-        if (!response.ok) {
-            throw new Error(result.error || '投稿に失敗しました');
+            if (!scheduledTime) {
+                throw new Error('予約投稿の日時を指定してください');
+            }
+
+            // 現在の時刻よりも未来かをチェック
+            const scheduledDate = new Date(scheduledTime);
+            const now = new Date();
+
+            if (scheduledDate <= now) {
+                throw new Error('予約時間は現在以降の時間を指定してください');
+            }
+
+            // 予約投稿データを準備
+            let unifiedContent = postMode === 'unified' ? document.getElementById('unified-content').value : null;
+
+            const scheduleData = {
+                ...postData,
+                scheduled_time: scheduledTime,
+                content: unifiedContent,
+                media_files: uploadedMediaFiles.map(file => file.path)
+            };
+
+            console.log('送信する予約投稿データ:', JSON.stringify(scheduleData));
+
+            try {
+                // 予約投稿 APIにリクエスト送信
+                const response = await fetch(API_URL.SCHEDULE, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(scheduleData)
+                });
+
+                if (!response.ok) {
+                    const responseText = await response.text();
+                    throw new Error(`予約投稿に失敗しました: ${responseText}`);
+                }
+
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(result.error || '予約投稿に失敗しました');
+                }
+
+                // ステータス表示
+                showSuccess(`${new Date(scheduledTime).toLocaleString('ja-JP')}に投稿が予約されました`);
+
+                // フォームをリセット
+                resetForm();
+
+                // 予約投稿一覧を更新
+                fetchScheduledPosts();
+            } catch (error) {
+                showError(`予約投稿に失敗しました: ${error.message}`);
+            }
+        } else {
+            // 通常投稿（予約なし）
+            try {
+                let response;
+
+                // メディアありの場合はPOST_WITH_MEDIAエンドポイントを使用
+                if (hasMedia) {
+                    // メディアファイルのパスを配列にまとめる
+                    const mediaFiles = uploadedMediaFiles.map(file => file.path);
+
+                    const mediaPostData = {
+                        ...postData,
+                        media_files: mediaFiles
+                    };
+
+                    response = await fetch(API_URL.POST_WITH_MEDIA, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(mediaPostData)
+                    });
+                } else {
+                    // メディアなしの場合は通常のPOSTエンドポイントを使用
+                    response = await fetch(API_URL.POST, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(postData)
+                    });
+                }
+
+                if (!response.ok) {
+                    const responseText = await response.text();
+                    throw new Error(`投稿に失敗しました: ${responseText}`);
+                }
+
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error('投稿に失敗しました');
+                }
+
+                // 投稿結果を表示
+                showPostResults(result.results);
+
+                // フォームをリセット
+                resetForm();
+
+            } catch (error) {
+                showError(`投稿に失敗しました: ${error.message}`);
+            }
         }
-
-        // 投稿結果の表示
-        showPostResult(result);
-
     } catch (error) {
         showError(error.message);
     } finally {
-        // 投稿ボタンを再有効化
+        // 投稿ボタンを元に戻す
+        const postButton = document.getElementById('post-button');
         postButton.disabled = false;
         postButton.textContent = '投稿する';
     }
 }
 
 // 投稿結果の表示
-function showPostResult(result) {
+function showPostResults(results) {
     const statusContainer = document.getElementById('status-container');
     statusContainer.innerHTML = '';
     statusContainer.classList.remove('hidden');
 
-    // 全体の成功/失敗に応じたメッセージ
-    const statusMessage = document.createElement('div');
-    statusMessage.className = `status-message ${result.success ? 'status-success' : 'status-error'}`;
-    statusMessage.textContent = result.success ? '投稿に成功しました！' : '一部のプラットフォームへの投稿に失敗しました。';
+    // 結果のヘッダー
+    const header = document.createElement('div');
+    header.className = 'status-header';
+    header.innerHTML = '<h3>投稿結果</h3>';
+    statusContainer.appendChild(header);
 
-    statusContainer.appendChild(statusMessage);
+    // 各プラットフォームの結果をリスト表示
+    const resultList = document.createElement('ul');
+    resultList.className = 'status-list';
 
-    // 各プラットフォームの結果表示
-    if (result.results) {
-        Object.keys(result.results).forEach(platform => {
-            const platformResult = result.results[platform];
-            const resultDiv = document.createElement('div');
-            resultDiv.className = 'platform-result';
+    Object.keys(results).forEach(platform => {
+        const result = results[platform];
+        const success = result.success;
 
-            const displayName = platform.charAt(0).toUpperCase() + platform.slice(1);
-            resultDiv.innerHTML = `
-                <strong>${displayName}:</strong> ${platformResult.success ? '成功' : `失敗 (${platformResult.error})`}
-            `;
+        const displayName = platform.charAt(0).toUpperCase() + platform.slice(1);
 
-            statusContainer.appendChild(resultDiv);
+        const listItem = document.createElement('li');
+        listItem.className = `status-item ${success ? 'success' : 'error'}`;
+        listItem.innerHTML = `
+            <div class="status-platform">${displayName}</div>
+            <div class="status-message">${success ? '投稿成功' : `エラー: ${result.error || '不明なエラー'}`}</div>
+        `;
+
+        resultList.appendChild(listItem);
+    });
+
+    statusContainer.appendChild(resultList);
+
+    // 5秒後に結果表示を閉じる
+    setTimeout(() => {
+        statusContainer.classList.add('hidden');
+    }, 5000);
+
+    // すべて成功なら成功メッセージも表示
+    const allSuccess = Object.values(results).every(result => result.success);
+    if (allSuccess) {
+        showSuccess('すべてのプラットフォームへの投稿が完了しました');
+    }
+}
+
+// フォームのリセット
+function resetForm() {
+    if (postMode === 'unified') {
+        document.getElementById('unified-content').value = '';
+        document.getElementById('unified-character-count').textContent = '0 / ' +
+            Math.min(...Object.values(characterLimits));
+    } else {
+        const textareas = document.querySelectorAll('.individual-content');
+        textareas.forEach(textarea => {
+            const platform = textarea.dataset.platform;
+            textarea.value = '';
+            textarea.parentElement.querySelector('.character-count').textContent =
+                `0 / ${characterLimits[platform]}`;
         });
     }
+
+    // メディアもクリア
+    uploadedMediaFiles = [];
+    updateMediaPreview();
+
+    // 予約設定もリセット
+    document.getElementById('schedule-toggle').checked = false;
+    document.getElementById('schedule-options').classList.add('hidden');
+    isScheduled = false;
+}
+
+// 成功メッセージの表示
+function showSuccess(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast success';
+    toast.innerHTML = `
+        <div class="toast-message">${message}</div>
+    `;
+
+    document.body.appendChild(toast);
+
+    // 3秒後に消去
+    setTimeout(() => {
+        toast.classList.add('fade-out');
+        setTimeout(() => {
+            document.body.removeChild(toast);
+        }, 300);
+    }, 3000);
 }
 
 // エラーメッセージの表示
 function showError(message) {
-    const statusContainer = document.getElementById('status-container');
-    statusContainer.innerHTML = '';
-    statusContainer.classList.remove('hidden');
+    const toast = document.createElement('div');
+    toast.className = 'toast error';
+    toast.innerHTML = `
+        <div class="toast-message">${message}</div>
+    `;
 
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'status-message status-error';
-    errorDiv.textContent = message;
+    document.body.appendChild(toast);
 
-    statusContainer.appendChild(errorDiv);
+    // 5秒後に消去
+    setTimeout(() => {
+        toast.classList.add('fade-out');
+        setTimeout(() => {
+            document.body.removeChild(toast);
+        }, 300);
+    }, 5000);
 }

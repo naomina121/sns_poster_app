@@ -8,3 +8,7 @@ tweepy==4.14.0
 mastodon.py==1.8.1
 misskey.py==4.1.0
 gunicorn==21.2.0
+cloudinary==1.44.0
+ulid-py==1.1.0
+psycopg2-binary==2.9.7
+SQLAlchemy==2.0.23

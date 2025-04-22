@@ -1,207 +1,687 @@
-/* ダークモード用スタイル */
 :root {
     --primary-color: #7aa9ff;
     --secondary-color: #8eb4ff;
+    --accent-color: #5a88cc;
     --dark-color: #e0e0e0;
     --light-color: #121212;
     --success-color: #4ade80;
     --warning-color: #fbbf24;
     --error-color: #f87171;
-    --background-color: #1a1a1a;
-    --card-background: #2a2a2a;
+    --background-color: #121212;
+    --card-background: #1e1e1e;
+    --input-background: #292929;
     --text-color: #e0e0e0;
-    --border-color: #444;
-    --button-hover: #5a88cc;
-    --shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    --border-color: #333;
+    --button-hover: #6c9aef;
+    --shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    --font-main: 'Roboto', sans-serif;
+}
+
+* {
+    margin: 0px;
+    padding: 0px;
+    box-sizing: border-box;
 }
 
 body {
+    font-family: var(--font-main);
     background-color: var(--background-color);
     color: var(--text-color);
+    line-height: 1.6;
 }
 
-/* ヘッダー */
+.container {
+    max-width: 1200px;
+    margin: 0px auto;
+    padding: 20px;
+}
+
 header {
-    border-bottom: 1px solid var(--border-color);
+    text-align: center;
+    margin-bottom: 40px;
+    padding: 30px 0px;
+    position: relative;
 }
 
-/* ダークモード切り替えボタン */
+header h1 {
+    color: var(--primary-color);
+    margin-bottom: 8px;
+    font-size: 2.5rem;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+}
+
+header p {
+    color: rgb(170, 170, 170);
+    font-size: 1rem;
+}
+
 #dark-mode-toggle {
     position: absolute;
     top: 20px;
     right: 20px;
-    background: #5a88cc;
+    background: var(--accent-color);
     color: white;
     border: none;
     border-radius: 20px;
-    padding: 8px 16px;
-    font-size: 0.9em;
+    padding: 10px 18px;
+    font-size: 0.9rem;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: 0.3s;
+    box-shadow: rgba(0, 0, 0, 0.3) 0px 2px 5px;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
 }
 
 #dark-mode-toggle:hover {
     background: var(--button-hover);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    transform: translateY(-2px);
+    box-shadow: rgba(0, 0, 0, 0.3) 0px 4px 8px;
+}
+
+#dark-mode-toggle:active {
+    transform: translateY(0px);
+    box-shadow: rgba(0, 0, 0, 0.3) 0px 2px 4px;
 }
 
 #dark-mode-toggle::before {
     content: "";
-    width: 14px;
-    height: 14px;
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446A9 9 0 1 1 12 2.992V3z"/></svg>');
+    width: 16px;
+    height: 16px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"white\"><path d=\"M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446A9 9 0 1 1 12 2.992V3z\"/></svg>");
     background-size: contain;
     display: inline-block;
 }
 
-/* セクション */
 section {
     background: var(--card-background);
+    border-radius: 8px;
+    padding: 25px;
+    margin-bottom: 30px;
     box-shadow: var(--shadow);
     border: 1px solid var(--border-color);
 }
 
-/* プラットフォーム選択カード */
+section h2 {
+    color: var(--primary-color);
+    margin-bottom: 20px;
+    font-weight: 500;
+    font-size: 1.4rem;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 8px;
+    display: inline-block;
+}
+
+.platforms-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 15px;
+}
+
 .platform-card {
-    background: #333;
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
+    flex: 1 1 0%;
+    min-width: 160px;
+    background: rgb(37, 37, 37);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 18px 15px;
+    text-align: center;
+    transition: 0.3s;
+    box-shadow: rgba(0, 0, 0, 0.2) 0px 2px 5px;
+}
+
+.platform-card.enabled {
+    cursor: pointer;
+}
+
+.platform-card.enabled:hover {
+    transform: translateY(-2px);
+    box-shadow: rgba(0, 0, 0, 0.2) 0px 5px 15px;
+    border-color: rgb(68, 68, 68);
 }
 
 .platform-card.selected {
     border-color: var(--primary-color);
-    background: rgba(122, 169, 255, 0.2);
+    background: rgba(122, 169, 255, 0.15);
+    box-shadow: rgba(122, 169, 255, 0.2) 0px 5px 15px;
 }
 
 .platform-card.disabled {
-    opacity: 0.5;
-    background: #2a2a2a;
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.platform-name {
+    font-weight: 500;
+    margin-bottom: 8px;
+    font-size: 1.1rem;
+    color: rgb(221, 221, 221);
 }
 
 .platform-status {
-    color: #aaa;
+    font-size: 0.85rem;
+    color: rgb(170, 170, 170);
+    padding: 4px 0px;
 }
 
 .platform-limit {
-    color: #888;
+    font-size: 0.85rem;
+    color: rgb(136, 136, 136);
+    margin-top: 8px;
 }
 
-/* 投稿モード切り替え */
 .post-mode-toggle {
+    display: flex;
+    margin-bottom: 25px;
+    border-radius: 8px;
+    overflow: hidden;
     border: 1px solid var(--border-color);
+    box-shadow: rgba(0, 0, 0, 0.2) 0px 2px 5px;
 }
 
 .post-mode-toggle button {
-    background: #333;
-    color: #ddd;
+    flex: 1 1 0%;
+    padding: 12px 15px;
+    background: rgb(37, 37, 37);
+    border: none;
+    cursor: pointer;
+    transition: 0.3s;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: rgb(204, 204, 204);
+}
+
+.post-mode-toggle button:first-child {
+    border-right: 1px solid var(--border-color);
 }
 
 .post-mode-toggle button.active {
     background: var(--primary-color);
-    color: #111;
+    color: rgb(18, 18, 18);
 }
 
-/* テキストエリア */
+.textarea-container {
+    position: relative;
+    margin-bottom: 20px;
+}
+
 textarea {
-    background-color: #333;
-    color: var(--text-color);
+    width: 100%;
+    min-height: 180px;
+    padding: 18px;
     border: 1px solid var(--border-color);
+    border-radius: 8px;
+    resize: vertical;
+    font-family: inherit;
+    font-size: 1rem;
+    transition: 0.3s;
+    background-color: var(--input-background);
+    color: var(--text-color);
+    box-shadow: rgba(0, 0, 0, 0.2) 0px 1px 3px inset;
 }
 
 textarea:focus {
+    outline: none;
     border-color: var(--primary-color);
-    background-color: #3a3a3a;
+    box-shadow: rgba(122, 169, 255, 0.2) 0px 0px 0px 3px;
+    background-color: rgb(51, 51, 51);
 }
 
 .character-count {
-    color: #aaa;
-    background: rgba(51, 51, 51, 0.8);
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    font-size: 0.85rem;
+    color: rgb(187, 187, 187);
+    background: rgba(41, 41, 41, 0.9);
+    padding: 3px 10px;
+    border-radius: 15px;
+    box-shadow: rgba(0, 0, 0, 0.2) 0px 1px 3px;
 }
 
-/* 個別投稿モード */
 .individual-post {
+    margin-bottom: 25px;
+    padding: 18px;
     border: 1px solid var(--border-color);
-    background: #333;
+    border-radius: 8px;
+    background: rgb(37, 37, 37);
+    box-shadow: rgba(0, 0, 0, 0.2) 0px 2px 5px;
+}
+
+.individual-post-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
 }
 
 .individual-post-platform {
+    font-weight: 500;
     color: var(--primary-color);
+    font-size: 1.1rem;
 }
 
-/* 投稿ボタン */
 .post-button {
+    display: block;
+    width: 100%;
+    padding: 15px 20px;
     background-color: var(--primary-color);
-    color: #111;
+    color: rgb(18, 18, 18);
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: 0.3s;
+    box-shadow: rgba(0, 0, 0, 0.2) 0px 4px 6px;
 }
 
 .post-button:hover {
     background-color: var(--secondary-color);
+    transform: translateY(-2px);
+    box-shadow: rgba(0, 0, 0, 0.25) 0px 6px 12px;
+}
+
+.post-button:active {
+    transform: translateY(0px);
+    box-shadow: rgba(0, 0, 0, 0.2) 0px 4px 6px;
 }
 
 .post-button:disabled {
-    background-color: #555;
-    color: #888;
+    background-color: rgb(68, 68, 68);
+    color: rgb(136, 136, 136);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
-/* ステータス表示 */
+.status-container {
+    margin-top: 25px;
+}
+
+.status-container.hidden {
+    display: none;
+}
+
 .status-message {
-    border-radius: var(--border-radius);
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    font-weight: 500;
 }
 
 .status-success {
-    background-color: rgba(74, 222, 128, 0.2);
+    background-color: rgba(74, 222, 128, 0.15);
     border: 1px solid var(--success-color);
     color: var(--success-color);
 }
 
 .status-error {
-    background-color: rgba(248, 113, 113, 0.2);
+    background-color: rgba(248, 113, 113, 0.15);
     border: 1px solid var(--error-color);
     color: var(--error-color);
 }
 
 .platform-result {
-    background: #333;
+    margin-top: 8px;
+    padding: 12px;
+    border-radius: 8px;
+    background: rgb(37, 37, 37);
     border: 1px solid var(--border-color);
 }
 
-/* フッター */
+.media-upload-section {
+    margin-top: 30px;
+}
+
+.media-upload-section h3 {
+    font-size: 1.1rem;
+    margin-bottom: 15px;
+    color: var(--text-color);
+    font-weight: 500;
+}
+
+.media-upload-container {
+    margin-bottom: 20px;
+}
+
+.media-dropzone {
+    border: 2px dashed rgb(68, 68, 68);
+    border-radius: 8px;
+    padding: 30px 25px;
+    text-align: center;
+    cursor: pointer;
+    background: rgb(37, 37, 37);
+    transition: 0.3s;
+}
+
+.media-dropzone p {
+    color: rgb(170, 170, 170);
+    margin: 0px;
+}
+
+.media-dropzone:hover {
+    border-color: var(--primary-color);
+    background: rgba(122, 169, 255, 0.08);
+}
+
+.media-dropzone.dragover {
+    border-color: var(--primary-color);
+    background: rgba(122, 169, 255, 0.12);
+}
+
+.media-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.media-item {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: rgba(0, 0, 0, 0.2) 0px 3px 8px;
+}
+
+.media-item img, .media-item video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.remove-media {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    background: rgba(0, 0, 0, 0.7);
+    border: none;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.remove-media:hover {
+    background: rgba(248, 113, 113, 0.9);
+}
+
+.media-loading {
+    width: 100%;
+    padding: 20px;
+    text-align: center;
+    color: rgb(170, 170, 170);
+}
+
+.schedule-section {
+    margin-top: 30px;
+}
+
+.schedule-section h3 {
+    font-size: 1.1rem;
+    margin-bottom: 15px;
+    color: var(--text-color);
+    font-weight: 500;
+}
+
+.schedule-toggle {
+    margin-bottom: 15px;
+}
+
+.schedule-toggle label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 500;
+    color: rgb(187, 187, 187);
+}
+
+.schedule-toggle input[type="checkbox"] {
+    margin-right: 10px;
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary-color);
+}
+
+.schedule-options {
+    margin-top: 15px;
+    padding: 20px;
+    background: rgb(37, 37, 37);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.schedule-options input[type="datetime-local"] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid rgb(68, 68, 68);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 1rem;
+    margin-bottom: 12px;
+    background: var(--input-background);
+    color: var(--text-color);
+    background-color: #454444;
+}
+
+.schedule-info {
+    font-size: 0.85rem;
+    color: rgb(170, 170, 170);
+    margin-top: 8px;
+}
+
+.scheduled-posts-section {
+    position: relative;
+}
+
+.refresh-button {
+    position: absolute;
+    top: 25px;
+    right: 25px;
+    padding: 8px 12px;
+    background: rgb(51, 51, 51);
+    border: 1px solid rgb(68, 68, 68);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: 0.3s;
+    color: rgb(221, 221, 221);
+}
+
+.refresh-button:hover {
+    background: rgb(68, 68, 68);
+    transform: translateY(-2px);
+    box-shadow: rgba(0, 0, 0, 0.2) 0px 3px 6px;
+}
+
+.scheduled-posts-container {
+    margin-top: 20px;
+}
+
+.scheduled-post-item {
+    padding: 20px;
+    margin-bottom: 15px;
+    background: rgb(37, 37, 37);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    position: relative;
+    transition: 0.3s;
+}
+
+.scheduled-post-item:hover {
+    box-shadow: rgba(0, 0, 0, 0.15) 0px 5px 15px;
+}
+
+.scheduled-post-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgb(51, 51, 51);
+}
+
+.scheduled-time {
+    font-weight: 500;
+    color: var(--primary-color);
+    font-size: 1rem;
+}
+
+.scheduled-status {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.pending {
+    background-color: rgba(246, 185, 59, 0.15);
+    border: 1px solid rgb(246, 185, 59);
+    color: rgb(251, 191, 36);
+}
+
+.completed {
+    background-color: rgba(74, 222, 128, 0.15);
+    border: 1px solid var(--success-color);
+    color: var(--success-color);
+}
+
+.failed {
+    background-color: rgba(248, 113, 113, 0.15);
+    border: 1px solid var(--error-color);
+    color: var(--error-color);
+}
+
+.scheduled-post-content {
+    margin-bottom: 15px;
+}
+
+.scheduled-platforms {
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    color: rgb(170, 170, 170);
+}
+
+.scheduled-text {
+    line-height: 1.5;
+    color: rgb(221, 221, 221);
+}
+
+.scheduled-media-info {
+    margin-top: 10px;
+    font-size: 0.85rem;
+    color: rgb(170, 170, 170);
+}
+
+.scheduled-post-actions {
+    text-align: right;
+}
+
+.delete-scheduled-post {
+    padding: 6px 12px;
+    background: rgb(51, 51, 51);
+    border: 1px solid rgb(68, 68, 68);
+    border-radius: 6px;
+    color: rgb(187, 187, 187);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: 0.3s;
+}
+
+.delete-scheduled-post:hover {
+    background: rgba(248, 113, 113, 0.15);
+    color: var(--error-color);
+    border-color: rgba(248, 113, 113, 0.3);
+}
+
+.no-scheduled-posts {
+    text-align: center;
+    color: rgb(170, 170, 170);
+    padding: 30px 20px;
+    font-style: italic;
+    background: rgb(37, 37, 37);
+    border-radius: 8px;
+    border: 1px dashed rgb(68, 68, 68);
+}
+
+.loading {
+    text-align: center;
+    color: rgb(170, 170, 170);
+    padding: 20px;
+}
+
+.hidden {
+    display: none;
+}
+
 footer {
-    color: #777;
+    text-align: center;
+    margin-top: 40px;
+    padding: 20px 0px;
+    color: rgb(119, 119, 119);
+    font-size: 0.9rem;
 }
 
-/* コードのシンタックスハイライト */
-code {
-    background-color: #2d2d2d;
-    color: #e6e6e6;
-    border: 1px solid #444;
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+    }
+
+    section {
+        padding: 20px 15px;
+    }
+
+    .platforms-container {
+        gap: 12px;
+    }
+
+    .platform-card {
+        padding: 15px 12px;
+    }
+
+    .post-button {
+        padding: 12px 15px;
+    }
 }
 
-pre {
-    background-color: #2d2d2d;
-    border: 1px solid #444;
-}
+@media (max-width: 576px) {
+    .platforms-container {
+        flex-direction: column;
+    }
 
-/* テーブル */
-table {
-    border-collapse: collapse;
-}
+    .platform-card {
+        min-width: 100%;
+        margin-bottom: 10px;
+    }
 
-th, td {
-    border: 1px solid var(--border-color);
-}
+    textarea {
+        min-height: 150px;
+        padding: 15px;
+    }
 
-th {
-    background-color: #333;
-}
+    .post-mode-toggle button {
+        padding: 10px;
+    }
 
-tr:nth-child(even) {
-    background-color: #2a2a2a;
-}
+    header h1 {
+        font-size: 2rem;
+    }
 
-tr:nth-child(odd) {
-    background-color: #333;
+    .refresh-button {
+        position: static;
+        display: block;
+        width: 100%;
+        margin-top: 10px;
+    }
 }
