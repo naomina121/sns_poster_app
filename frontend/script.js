@@ -612,6 +612,14 @@ async function deleteScheduledPost(postId) {
 // 投稿処理
 async function handlePost() {
     try {
+        // 投稿ボタンを無効化
+        const postButton = document.getElementById('post-button');
+        postButton.disabled = true;
+        postButton.innerText = '投稿処理中...';
+
+        // 処理中の状態表示
+        showProcessingStatus('投稿を送信準備中です...');
+
         // 選択されたプラットフォームを取得
         const selectedPlatforms = Array.from(document.querySelectorAll('.platform-card.selected'))
             .map(card => card.dataset.platform);
@@ -667,6 +675,7 @@ async function handlePost() {
 
         // 予約投稿の場合
         if (isScheduled) {
+            showProcessingStatus('予約投稿を登録中...');
             const scheduledTime = document.getElementById('scheduled-time').value;
             if (!scheduledTime) {
                 showError('予約時間を指定してください');
@@ -690,6 +699,7 @@ async function handlePost() {
             showSuccess('投稿が予約されました');
             fetchScheduledPosts();  // 予約投稿一覧を更新
         } else {
+            showProcessingStatus('SNSに投稿中...');
             // 即時投稿の場合
             const endpoint = uploadedMediaFiles.length > 0 ? API_URL.POST_WITH_MEDIA : API_URL.POST;
             const response = await fetch(endpoint, {
@@ -710,9 +720,37 @@ async function handlePost() {
 
         // フォームをリセット
         resetForm();
+        // 投稿ボタンを元に戻す
+        resetPostButton();
     } catch (error) {
         showError(error.message);
     }
+}
+
+// 投稿ボタンをリセットする関数
+function resetPostButton() {
+    const postButton = document.getElementById('post-button');
+    postButton.disabled = false;
+    postButton.innerText = '投稿する';
+}
+
+// 処理中の状態表示を行う関数
+function showProcessingStatus(message) {
+    const statusContainer = document.getElementById('status-container');
+    statusContainer.innerHTML = '';
+    statusContainer.classList.remove('hidden');
+
+    // 処理中メッセージ用のスタイル
+    statusContainer.className = 'status-container processing-message';
+
+    // メッセージとローディングアニメーションを表示
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'status-message with-spinner';
+    messageDiv.innerHTML = `
+        <div class="spinner"></div>
+        <p>${message}</p>
+    `;
+    statusContainer.appendChild(messageDiv);
 }
 
 // 投稿結果の表示
